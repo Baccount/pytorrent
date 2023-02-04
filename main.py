@@ -1,4 +1,5 @@
 import sys
+import asyncio
 from block import State
 
 __author__ = 'alexisgallepe'
@@ -33,46 +34,46 @@ class Run(object):
         logging.info("PeersManager Started")
         logging.info("PiecesManager Started")
 
-    def start(self):
-        peers_dict = self.tracker.get_peers_from_trackers()
-        self.peers_manager.add_peers(peers_dict.values())
+    async def start(self):
+            peers_dict = self.tracker.get_peers_from_trackers()
+            self.peers_manager.add_peers(peers_dict.values())
 
-        while not self.pieces_manager.all_pieces_completed():
-            if not self.peers_manager.has_unchoked_peers():
-                time.sleep(1)
-                logging.info("No unchocked peers")
-                continue
-
-            for piece in self.pieces_manager.pieces:
-                index = piece.piece_index
-
-                if self.pieces_manager.pieces[index].is_full:
+            while not self.pieces_manager.all_pieces_completed():
+                if not self.peers_manager.has_unchoked_peers():
+                    await asyncio.sleep(1)
+                    logging.info("No unchocked peers")
                     continue
 
-                peer = self.peers_manager.get_random_peer_having_piece(index)
-                if not peer:
-                    continue
+                for piece in self.pieces_manager.pieces:
+                    index = piece.piece_index
 
-                self.pieces_manager.pieces[index].update_block_status()
+                    if self.pieces_manager.pieces[index].is_full:
+                        continue
 
-                data = self.pieces_manager.pieces[index].get_empty_block()
-                if not data:
-                    continue
+                    peer = self.peers_manager.get_random_peer_having_piece(index)
+                    if not peer:
+                        continue
 
-                piece_index, block_offset, block_length = data
-                piece_data = message.Request(piece_index, block_offset, block_length).to_bytes()
-                peer.send_to_peer(piece_data)
+                    self.pieces_manager.pieces[index].update_block_status()
 
+                    data = self.pieces_manager.pieces[index].get_empty_block()
+                    if not data:
+                        continue
+
+                    piece_index, block_offset, block_length = data
+                    piece_data = message.Request(piece_index, block_offset, block_length).to_bytes()
+                    await peer.send_to_peer(piece_data)
+
+                self.display_progression()
+
+                await asyncio.sleep(0.1)
+
+            logging.info("File(s) downloaded successfully.")
             self.display_progression()
 
-            time.sleep(0.1)
+            self._exit_threads()
 
-        logging.info("File(s) downloaded successfully.")
-        self.display_progression()
-
-        self._exit_threads()
-
-    def display_progression(self):
+    async def display_progression(self):
         new_progression = 0
 
         for i in range(self.pieces_manager.number_of_pieces):
@@ -95,14 +96,18 @@ class Run(object):
 
         self.last_log_line = current_log_line
         self.percentage_completed = new_progression
-
-    def _exit_threads(self):
+    
+    async def _exit_threads(self):
         self.peers_manager.is_active = False
         os._exit(0)
 
+async def start(self):
+    while True:
+        await asyncio.sleep(1)
+        await self.display_progression()
 
 if __name__ == '__main__':
     logging.basicConfig(level=logging.DEBUG)
 
     run = Run()
-    run.start()
+    asyncio.run(run.start())
